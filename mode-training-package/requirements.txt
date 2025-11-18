@@ -1,0 +1,40 @@
+# Core dependencies
+torch>=2.0.0
+transformers>=4.30.0
+datasets>=2.14.0
+numpy>=1.24.0
+tqdm>=4.65.0
+
+# Training and evaluation
+wandb>=0.15.0
+scikit-learn>=1.3.0
+
+# Data processing
+pandas>=2.0.0
+
+# Visualization (for metrics plotting)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Required: For GCS data loading
+# Pin google-api-python-client to version compatible with google-api-core 2.x
+google-cloud-storage>=2.10.0
+google-api-python-client>=2.0.0
+
+# Required: For Vertex AI structured logging
+python-json-logger>=2.0.0
+
+# Optional: For cloud deployment
+# google-cloud-aiplatform>=1.38.0
+
+# Development
+pytest>=7.4.0
+black>=23.7.0
+flake8>=6.1.0
+
+# Dependency conflict resolution:
+# - google-api-python-client>=2.0.0 ensures compatibility with google-api-core 2.x (in pre-built container)
+# - pyarrow constraint: ibis-framework (transitive dep of datasets) requires pyarrow<15
+#   Pinning to <15 to satisfy ibis-framework, even though container has pyarrow 22.0.0
+pyarrow>=14.0.0,<15.0.0
+
