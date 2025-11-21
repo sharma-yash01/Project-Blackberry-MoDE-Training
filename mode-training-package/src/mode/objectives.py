@@ -41,9 +41,24 @@ def compute_mode_loss(
     budget_loss = F.mse_loss(outputs['budget'], actual_budget)
 
     # 2. Difficulty classification loss (auxiliary)
+    # CHANGED: Added class weighting to handle 10x class imbalance (more samples for low complexity)
+    # PRIOR: F.cross_entropy(..., weight=None) - no class weighting
+    # REASON: Low complexity labels (0-6) have ~10x more samples than high complexity (7-10)
+    #         Weighting gives higher penalty for misclassifying rare high-complexity cases
+    # Class weights: [labels 0-6: 1.0, label 7: 2.0, label 8: 3.0, label 9: 5.0, label 10: 8.0]
+    # Based on approximate 10x imbalance: labels 7-10 should have 10x weight, but we use progressive weighting
+    device = outputs['difficulty_logits'].device
+    class_weights = torch.tensor(
+        [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,  # Labels 0-6 (low complexity, abundant)
+        2.0,  # Label 7 (medium-high complexity, less common)
+        3.0,  # Label 8 (high complexity, rare)
+        5.0,  # Label 9 (very high complexity, very rare)
+        8.0   # Label 10 (unlimited, rare)
+    ], device=device)
     difficulty_loss = F.cross_entropy(
         outputs['difficulty_logits'],
-        difficulty_label
+        difficulty_label,
+        weight=class_weights
     )
 
     # 3. Expert-specific losses (only for assigned expert, labels 0-9)
@@ -75,11 +90,17 @@ def compute_mode_loss(
     load_balance_loss = -entropy  # Negative entropy (we want to maximize it)
 
     # Combined loss
+    # CHANGED: Loss weights now loaded from config hyperparameters (see config.py for values and PRIOR values)
+    # PRIOR hardcoded values: budget_loss + 0.5 * difficulty_loss + 0.3 * expert_loss_total + 0.01 * load_balance_loss
+    # REASON for changes (see config.py for full details):
+    #   - difficulty_loss_weight: Increased to improve routing accuracy (expert accuracy plateaued at 73-75%)
+    #   - expert_loss_weight: Increased to strengthen expert specialization for high-complexity cases (labels 7-10 had high MAE)
+    #   - load_balance_loss_weight: Increased to encourage better expert diversity (load balance loss was deeply negative)
     total_loss = (
         budget_loss +
-        0.5 * difficulty_loss +
-        0.3 * expert_loss_total +
-        0.01 * load_balance_loss  # Small weight for load balancing
+        model.config.difficulty_loss_weight * difficulty_loss +
+        model.config.expert_loss_weight * expert_loss_total +
+        model.config.load_balance_loss_weight * load_balance_loss
     )
 
     return {

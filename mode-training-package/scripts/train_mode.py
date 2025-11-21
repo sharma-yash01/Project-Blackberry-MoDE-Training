@@ -82,10 +82,18 @@ def main():
     parser.add_argument("--checkpoint_dir", type=str, default=None, help="Checkpoint directory (default: ./checkpoints/mode or output_dir if output_dir is set)")
     parser.add_argument("--log_dir", type=str, default=None, help="Log directory (default: ./logs/mode or output_dir/logs if output_dir is set)")
     
+    # GCS paths for manual uploads (alternative to output_dir, avoids colon parsing issues)
+    parser.add_argument("--gcs_bucket", type=str, default=None, help="GCS bucket name for model artifact uploads (e.g., mode-training-init-us-central-1)")
+    parser.add_argument("--gcs_path", type=str, default=None, help="GCS path within bucket for model artifacts (e.g., followup-run/train-run-v1)")
+    
     # Other
     parser.add_argument("--use_wandb", action="store_true", help="Use Weights & Biases logging")
     
     args = parser.parse_args()
+    
+    # Construct output_dir from gcs_bucket and gcs_path if both provided
+    if args.gcs_bucket and args.gcs_path:
+        args.output_dir = f"gs://{args.gcs_bucket}/{args.gcs_path}"
     
     # Handle output_dir: if provided, use it for checkpoint_dir and log_dir unless they are explicitly set
     if args.output_dir:

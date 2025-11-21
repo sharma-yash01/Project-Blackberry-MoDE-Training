@@ -33,6 +33,7 @@ from .objectives import compute_mode_loss
 
 logger = logging.getLogger(__name__)
 
+SAVE_METRICS_EVERY_N_EPOCHS = 10  # Save metrics every 10 epochs
 
 class MoDETrainer:
     """Trainer for MoDE Budget Model"""
@@ -556,7 +557,7 @@ class MoDETrainer:
                 self.best_val_loss = val_metrics['val/loss']
 
             # Save metrics every 2 epochs (epoch % 2 == 0) and at the last epoch
-            should_save_metrics = (epoch % 2 == 0) or (epoch == self.config.num_epochs)
+            should_save_metrics = (epoch % SAVE_METRICS_EVERY_N_EPOCHS == 0) or (epoch == self.config.num_epochs)
             self.save_checkpoint(epoch, val_metrics, is_best, save_metrics=should_save_metrics)
 
         # Training complete - save final metrics and summarize

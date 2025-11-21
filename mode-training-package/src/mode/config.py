@@ -33,14 +33,21 @@ class MoDEConfig:
     unlimited_budget: int = 32774  # Budget for label 10 (unlimited) - anything >= 32774 tokens
 
     # Training
-    batch_size: int = 128
-    learning_rate: float = 2e-4
+    batch_size: int = 192
+    learning_rate: float = 4e-4  # PRIOR: 2e-4 - Reduced from 5e-4 (user's setting) to 3e-4 to reduce training instability/spikes
     num_epochs: int = 50
-    warmup_steps: int = 500
+    warmup_steps: int = 350  # PRIOR: 500 - Reduced to account for larger batch_size (192 vs 128), scaled proportionally: 500 * (128/192) ≈ 333, rounded to 350
     gradient_clip: float = 5.0  # Safe value for MSE + classification losses
     # Typical values: 0.5-1.0 (pure classification), 2.0-5.0 (vision/regression), 
     # 5.0-10.0 (MSE + classification). 5.0 provides safety without being overly restrictive.
     weight_decay: float = 0.01
+    
+    # Loss weights for multi-component loss function
+    # CHANGED: Updated based on 50-epoch training analysis
+    # PRIOR values: difficulty_loss_weight=0.5, expert_loss_weight=0.3, load_balance_loss_weight=0.01
+    difficulty_loss_weight: float = 0.7  # PRIOR: 0.5 - Weight for difficulty classification loss
+    expert_loss_weight: float = 0.5  # PRIOR: 0.3 - Weight for expert-specific loss
+    load_balance_loss_weight: float = 0.02  # PRIOR: 0.01 - Weight for load balancing loss
 
     # Data
     base_model: str = "meta-llama/Meta-Llama-3-8B"

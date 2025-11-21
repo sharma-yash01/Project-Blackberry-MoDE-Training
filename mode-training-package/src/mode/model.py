@@ -421,26 +421,33 @@ class MoDEBudgetModel(nn.Module):
         unlimited_weight = expert_weights[:, self.config.n_experts:]  # [batch_size, 1]
 
         if self.training:
-            # Get predictions from all experts
+            # CHANGED: Use top-1 routing for training (matches inference) instead of weighted combination
+            # PRIOR: Used weighted combination of all experts (soft routing)
+            # REASON: Eliminates train/test mismatch - model now learns same behavior it will use at inference
+            selected_label = torch.argmax(expert_weights, dim=-1)  # [batch]
+            
+            # Get predictions from all experts (needed for expert_loss computation)
             expert_budgets = []
             for expert in self.experts:
                 budget = expert(query_repr)  # [batch_size, 1]
                 expert_budgets.append(budget)
-
             expert_budgets = torch.stack(expert_budgets, dim=1)  # [batch_size, n_experts, 1]
-
-            # Weighted combination of expert predictions
-            expert_budget = torch.sum(
-                expert_weights_only.unsqueeze(-1) * expert_budgets,
-                dim=1
-            )  # [batch_size, 1]
-
-            # Handle unlimited: if label 10 is selected, use unlimited_budget
-            unlimited_budget_tensor = torch.full_like(expert_budget, self.config.unlimited_budget)
-            final_budget = (
-                expert_budget * (1 - unlimited_weight) +
-                unlimited_budget_tensor * unlimited_weight
-            )
+            
+            # Use top-1 expert only (hard routing, same as inference)
+            final_budget = []
+            for i in range(input_ids.size(0)):  # Loop over batch
+                label_id = selected_label[i].item()
+                if label_id == self.config.n_experts:  # Label 10 (unlimited)
+                    budget = torch.tensor(
+                        [[self.config.unlimited_budget]],
+                        device=query_repr.device,
+                        dtype=query_repr.dtype
+                    )
+                else:
+                    # Use the selected expert (top-1)
+                    budget = self.experts[label_id](query_repr[i:i+1])
+                final_budget.append(budget)
+            final_budget = torch.cat(final_budget, dim=0)  # [batch_size, 1]
         else:
             # Inference: Option A - Top-1 (only dominant label)
             selected_label = torch.argmax(expert_weights, dim=-1)  # [batch]
@@ -477,19 +484,20 @@ class MoDEBudgetModel(nn.Module):
             'difficulty_logits': difficulty_logits,
         }
 
-        if return_intermediate:
-            if not self.training:
-                # Create expert_budgets for inference mode
-                if 'expert_budgets' not in locals():
-                    expert_budgets = []
-                    for expert in self.experts:
-                        budget = expert(query_repr)
-                        expert_budgets.append(budget)
-                    expert_budgets = torch.stack(expert_budgets, dim=1)
+        # During training, always include expert_budgets and expert_weights for loss computation
+        # During inference, only include if return_intermediate is True
+        if self.training or return_intermediate:
+            if not self.training and 'expert_budgets' not in locals():
+                # Create expert_budgets for inference mode when return_intermediate=True
+                expert_budgets = []
+                for expert in self.experts:
+                    budget = expert(query_repr)
+                    expert_budgets.append(budget)
+                expert_budgets = torch.stack(expert_budgets, dim=1)
             
             result.update({
                 'expert_weights': expert_weights,
-                'expert_budgets': expert_budgets if self.training or return_intermediate else None,
+                'expert_budgets': expert_budgets,
                 'gate_logits': gate_logits,
                 'query_repr': query_repr
             })
