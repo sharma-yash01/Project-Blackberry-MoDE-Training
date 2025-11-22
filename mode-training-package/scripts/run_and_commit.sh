@@ -3,12 +3,17 @@
 # run_and_commit.sh - Quickly commit and push changes to GitHub
 #
 # This script automates the workflow of:
-# 1. Staging all your current changes
+# 1. Staging all your current changes (respecting .gitignore rules)
 # 2. Creating a git commit with a descriptive message (auto-generated or custom)
 # 3. Pushing to the remote repository
 #
 # This is designed for quick commits when you've made changes and just want
 # to commit and push them without running any training scripts.
+#
+# Note: The script automatically respects .gitignore, which excludes:
+#   - Python cache files (__pycache__/, *.pyc, etc.)
+#   - All .md files except README.md
+#   - Other standard ignored files (OS files, IDE files, etc.)
 #
 # Usage:
 #   ./scripts/run_and_commit.sh [OPTIONS]
@@ -139,11 +144,22 @@ if [ "$DRY_RUN" = true ]; then
     if [ -z "$GIT_STATUS" ]; then
         echo "No changes detected. Nothing would be committed."
     else
-        echo "Files that would be staged:"
+        echo "Files that would be staged (respecting .gitignore):"
         echo "----------------------------------------"
         git status --short
         echo "----------------------------------------"
         echo ""
+        
+        # Show ignored files for reference
+        IGNORED=$(git status --ignored --short 2>/dev/null | grep "^!!" | head -10)
+        if [ -n "$IGNORED" ]; then
+            echo "Files ignored by .gitignore (won't be committed):"
+            echo "----------------------------------------"
+            git status --ignored --short 2>/dev/null | grep "^!!" | sed 's/^!! //' | head -10
+            echo "... (showing first 10, may be more)"
+            echo "----------------------------------------"
+            echo ""
+        fi
         
         # Show what commit message would be used
         if [ -z "$COMMIT_MSG" ]; then
@@ -171,7 +187,7 @@ if [ -z "$GIT_STATUS" ]; then
 fi
 
 echo ""
-print_info "Changes detected:"
+print_info "Changes detected (respecting .gitignore):"
 echo "----------------------------------------"
 git status --short
 echo "----------------------------------------"
@@ -179,7 +195,9 @@ echo ""
 
 # Step 2: Stage all changes
 # This stages all modified, new, and deleted files
-print_info "Staging all changes..."
+# Note: This automatically respects .gitignore rules, so cache files, 
+# .md files (except README.md), and other ignored files won't be staged
+print_info "Staging all changes (respecting .gitignore)..."
 git add -A
 
 # Verify something was staged
